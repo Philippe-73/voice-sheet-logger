@@ -31,10 +31,18 @@ function json_(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// Bound script (Extensions > Apps Script) needs nothing. A standalone script — the only
+// kind you can create from a phone — has no active spreadsheet, so set a SHEET_ID script
+// property to the id in the sheet's URL and it works the same.
+function ss_() {
+  var id = PropertiesService.getScriptProperties().getProperty('SHEET_ID');
+  return id ? SpreadsheetApp.openById(id) : SpreadsheetApp.getActiveSpreadsheet();
+}
+
 // Find the grid by header text — the columns are not necessarily A..D, and the tab
 // could get renamed or joined by others.
 function layout_() {
-  var sheets = SpreadsheetApp.getActiveSpreadsheet().getSheets();
+  var sheets = ss_().getSheets();
   for (var s = 0; s < sheets.length; s++) {
     var sh = sheets[s];
     if (sh.getLastRow() < 1 || sh.getLastColumn() < 1) continue;
