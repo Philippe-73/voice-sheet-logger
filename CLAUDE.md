@@ -120,6 +120,12 @@ add only if real speech defeats it), photos of box contents, box search/lookup (
 an unpacking problem), per-user accounts, and a README (this file plus `DEPLOY.md`
 cover it).
 
+**Sheet-driven room colours: considered and declined** (owner's call, 2026-07-27). Google
+does not expose dropdown chip colours to Apps Script, so auto-sync would mean a legend
+strip of coloured cells in the sheet read via `getBackgrounds()`. The owner will send the
+real label colours once the sheets are ordered and they get edited into `ROOM_COLORS` by
+hand. Don't build the legend unless asked. Room *names* already sync automatically.
+
 Notes (column D) *is* built: saying "note" splits the rest of the utterance into the
 Notes column, and the preview has an editable Notes box. Note text is deliberately **not**
 filler-stripped the way contents is — trimming leading words turned "for the movers" into
