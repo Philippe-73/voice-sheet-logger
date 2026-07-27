@@ -152,28 +152,38 @@ function loadRooms() {
 
 /* ---- speech: tap on, tap off ---- */
 var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-var rec = null, recording = false, finalText = '', interim = '';
+var rec = null, recording = false;
+var committed = '';   // utterances already finished, from earlier recognition sessions
+var live = '';        // the sentence being spoken right now
 
 function spawn() {
   rec = new SR();
   rec.lang = LANG;
-  rec.continuous = true;
+  // ponytail: continuous=false plus the respawn below, NOT continuous=true. Android Chrome
+  // re-emits a growing hypothesis ("this" → "this is" → "this is a"), so anything that
+  // appends per event duplicates every word. One utterance per session, rebuilt from the
+  // event each time and never appended, is the only shape that stays correct.
+  rec.continuous = false;
   rec.interimResults = true;
   rec.onresult = function (e) {
-    interim = '';
-    for (var i = e.resultIndex; i < e.results.length; i++) {
-      var t = e.results[i][0].transcript;
-      if (e.results[i].isFinal) finalText += t + ' '; else interim += t;
-    }
-    $('live').textContent = (finalText + interim).trim();
+    var s = '';
+    for (var i = 0; i < e.results.length; i++) s += e.results[i][0].transcript + ' ';
+    live = s.trim();
+    $('live').textContent = (committed + ' ' + live).trim();
   };
   rec.onerror = function (e) {
     if (e.error === 'not-allowed') { recording = false; armMic(false); status('Microphone permission denied'); }
     else if (e.error === 'network') status('Speech needs a connection');
   };
-  // ponytail: Android Chrome ends recognition at every pause even with continuous=true,
-  // so respawn while the button is still armed or tap-to-stop truncates mid-sentence.
-  rec.onend = function () { if (recording) spawn(); };
+  // Android Chrome ends recognition at every pause, so bank the finished sentence and
+  // start another session while the button is still armed. Without this, tap-to-stop
+  // would only ever capture the last few words.
+  rec.onend = function () {
+    if (!recording) return;                       // stopRec already took the text
+    if (live) committed = (committed + ' ' + live).trim();
+    live = '';
+    spawn();
+  };
   rec.start();
 }
 
@@ -185,7 +195,7 @@ function armMic(on) {
 function startRec() {
   if (!SR) return status('No speech support here — open in Chrome');
   if (!rooms.length) return status('No room list yet — check the connection');
-  finalText = ''; interim = ''; $('live').textContent = '';
+  committed = ''; live = ''; $('live').textContent = '';
   status('');
   recording = true; armMic(true);
   spawn();
@@ -194,7 +204,9 @@ function startRec() {
 function stopRec() {
   recording = false; armMic(false);
   try { rec.stop(); } catch (e) {}
-  toPreview((finalText + ' ' + interim).trim());
+  var text = (committed + ' ' + live).trim();   // take it now; onend arrives too late
+  committed = ''; live = '';
+  toPreview(text);
 }
 
 function toPreview(text) {
@@ -291,6 +303,7 @@ $('redo').onclick = function () { show('main'); startRec(); };
 $('accept').onclick = accept;
 $('again').onclick = function () { show('main'); showPending(); status(''); $('live').textContent = ''; };
 window.addEventListener('online', function () { if (queue.length) retry(); });
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 
 if (!cfg.exec || !cfg.secret) { show('setup'); }
 else {

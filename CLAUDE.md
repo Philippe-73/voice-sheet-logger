@@ -11,22 +11,22 @@ Approved plan (fuller rationale, plus an appendix on turning this into an APK):
 
 ## State as of 2026-07-27
 
-Code is complete and tested locally. Not yet live — three things need the owner:
+**Live.** Page: https://philippe-73.github.io/voice-sheet-logger/ — repo
+`Philippe-73/voice-sheet-logger`, public (free Pages requires it), deliberately named
+with no reference to moving; see Privacy below. Apps Script is deployed as a Web app
+bound to the sheet, `runTest` passed against the real sheet, and a wrong-password POST
+from the live origin correctly returns `forbidden`. The `/exec` URL and password are
+held only on the phones — they are not in this repo and not in this file.
 
-1. **Apps Script deploy.** Paste `Code.gs` into the sheet's Apps Script, set the
-   `SECRET` script property, deploy as Web app (Execute as: Me / Access: Anyone), copy
-   the `/exec` URL. Steps in `DEPLOY.md` §1. Nobody but the owner can do this — it's
-   their Google account.
-2. **`gh` CLI.** Not installed on this machine. Needs
-   `winget install --id GitHub.cli` then `gh auth login`. After that the repo can be
-   created and Pages switched on from the CLI (`DEPLOY.md` §2). Git itself is already
-   authenticated for **Philippe-73** via Git Credential Manager, so pushing works
-   without any login — only *creating* the repo needs `gh` (or the GitHub web UI).
-3. **Phone setup.** Install to home screen, paste `/exec` URL + password once each.
+`gh` CLI is installed but **not authenticated** (`gh auth status` → logged out); the
+repo was created by the owner in the browser. Pushing works regardless, through Git
+Credential Manager as **Philippe-73**. Anything needing the GitHub API (Pages settings,
+releases) still needs `gh auth login` first.
 
-Local git repo is initialized and committed; the remote does not exist yet.
-Target repo: `Philippe-73/voice-sheet-logger`, **public** (free Pages requires it),
-deliberately named with no reference to moving — see Privacy below.
+Open at last session end: phone 1 was installed as a browser shortcut rather than a real
+app — `sw.js` and `icon-512.png` were added to satisfy Chrome's installability check, and
+the owner needs to remove the old shortcut and re-add via **Install app**. Phone 2 not
+set up yet.
 
 ## Files
 
@@ -36,7 +36,8 @@ deliberately named with no reference to moving — see Privacy below.
 | `parse.js` | `parseEntry(transcript, rooms)` → `{box, room, content}`. Plain script, no module system, so both the page and the test can load it. |
 | `parse.test.cjs` | `node parse.test.cjs` — the only test. Asserts, no framework. |
 | `Code.gs` | Apps Script web app: `doPost` with `rooms` and `save` actions, plus `runTest()` to run from the editor. |
-| `manifest.json`, `icon-192.png` | Home-screen install. |
+| `manifest.json`, `icon-192.png`, `icon-512.png` | Home-screen install. |
+| `sw.js` | Empty fetch handler, nothing else. Chrome only offers "Install app" (a real app entry, no URL bar) when a service worker with a fetch handler exists. Do not add caching — a stale cached app during a move is worse than no offline support. |
 | `DEPLOY.md` | Click-through deploy + troubleshooting. Placeholder URLs only. |
 
 ## Decisions a future session should not "fix"
@@ -44,9 +45,16 @@ deliberately named with no reference to moving — see Privacy below.
 - **`Content-Type: text/plain` on the POST is deliberate.** It keeps the request
   "simple" so the browser skips the CORS preflight, which Apps Script will not answer.
   Switching to `application/json` breaks saving.
-- **Speech recognition respawns on `onend` while recording.** Android Chrome ends
-  recognition at every pause even with `continuous = true`. Removing the respawn makes
-  tap-to-stop silently truncate mid-sentence.
+- **Speech uses `continuous = false` plus a respawn on `onend`** — not `continuous = true`.
+  This shape is load-bearing and was arrived at by shipping the wrong one:
+  - Android Chrome re-emits a *growing hypothesis* on every `onresult` ("this" → "this is"
+    → "this is a"). Code that appends per event duplicates every word — the first real box
+    logged a paragraph of compounding fragments into the sheet.
+  - So `onresult` **rebuilds** the sentence from `e.results` each time and never appends;
+    `onend` banks the finished sentence into `committed` and starts a new session.
+  - `stopRec` reads `committed + live` synchronously rather than waiting for `onend`,
+    which fires too late.
+  Regression check is in the Verify section — run it before touching any of this.
 - **The sheet assigns box numbers, not the phone.** `writeEntry_` takes the first
   numbered row with an empty Content cell, under `LockService`, and returns that number.
   This is what makes two phones safe. A spoken "box 23" overrides and targets that row.
@@ -94,7 +102,15 @@ the live page instead of reloading it): set `cfg`, `rooms`, `queue`, then call
 `renderChips(); show('main'); toPreview('box 14 kitchen pots and pans')` and inspect
 `#band` / `#content`. Stub `window.fetch` to return `{ok:true,box:N}` and call
 `accept()` for the save path; reject it to exercise the queue, then `retry()`.
-All of that was run and passed on 2026-07-27.
+
+**Speech duplication regression check** — stub `window.SpeechRecognition` with a fake
+whose `start()` fires `onresult` once per *growing* hypothesis (`box` → `box one` →
+`box one storage`), then `onend` after a tick, and give it a second session
+(`this` → `this is` → `this is a test`). Point `SR` at the stub, `startRec()`, wait,
+`stopRec()`. Correct result is `box one storage this is a test`. Any repetition of
+leading words means the append bug is back.
+
+All of the above was run and passed on 2026-07-27.
 
 ## Deliberately not built
 
