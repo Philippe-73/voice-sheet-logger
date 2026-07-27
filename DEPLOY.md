@@ -21,7 +21,7 @@
    ```
 7. Any time you edit `Code.gs` after this, you must re-deploy or phones keep hitting the old code:
    **Deploy → Manage deployments → edit (pencil) → New version → Deploy**.
-8. Optional sanity check: in the editor, select the `test_` function from the function dropdown and click **Run**. It writes a scratch row, asserts, then clears it.
+8. Optional sanity check: in the editor, select the `runTest` function from the function dropdown and click **Run**. It writes a scratch row, asserts, then clears it.
 
 ## 2. Publish the page (GitHub Pages)
 

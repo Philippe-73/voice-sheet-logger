@@ -35,7 +35,7 @@ deliberately named with no reference to moving — see Privacy below.
 | `index.html` | The whole app: UI, speech, save queue. No framework, no build step. |
 | `parse.js` | `parseEntry(transcript, rooms)` → `{box, room, content}`. Plain script, no module system, so both the page and the test can load it. |
 | `parse.test.cjs` | `node parse.test.cjs` — the only test. Asserts, no framework. |
-| `Code.gs` | Apps Script web app: `doPost` with `rooms` and `save` actions, plus `test_()` to run from the editor. |
+| `Code.gs` | Apps Script web app: `doPost` with `rooms` and `save` actions, plus `runTest()` to run from the editor. |
 | `manifest.json`, `icon-192.png` | Home-screen install. |
 | `DEPLOY.md` | Click-through deploy + troubleshooting. Placeholder URLs only. |
 
@@ -86,7 +86,7 @@ that JSON body, not a 403.
 node parse.test.cjs
 ```
 
-Apps Script editor: run `test_()` — writes a scratch row, reads it back, clears it,
+Apps Script editor: run `runTest()` — writes a scratch row, reads it back, clears it,
 throws on mismatch.
 
 Browser smoke test without a mic (the in-app preview pane keeps one document, so drive

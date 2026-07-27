@@ -123,8 +123,9 @@ function writeEntry_(box, room, content, notes) {
 }
 
 // Run this once from the editor after pasting: writes a scratch row, reads it back,
-// then clears it. Throws on any mismatch.
-function test_() {
+// then clears it. Throws on any mismatch. No trailing underscore — Apps Script treats
+// those as private and leaves them out of the editor's Run dropdown.
+function runTest() {
   var rooms = roomOptions_();
   if (!rooms.length) throw new Error('Room dropdown is empty — set up the validation first');
 
@@ -143,5 +144,5 @@ function test_() {
 
   L.sheet.getRange(row, L.room).clearContent();
   L.sheet.getRange(row, L.content).clearContent();
-  Logger.log('test_ ok — wrote box ' + box + ' as "' + rooms[0] + '", then cleared it');
+  Logger.log('runTest ok — wrote box ' + box + ' as "' + rooms[0] + '", then cleared it');
 }
