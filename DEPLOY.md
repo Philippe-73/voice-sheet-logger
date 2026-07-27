@@ -74,6 +74,9 @@ First build takes a minute or two.
 
 1. Tap **Record**.
 2. Say the contents. Optionally say "box 23" to target a specific box, and a room name to switch rooms.
+   Say **"note"** and everything after it goes to the Notes column instead of Contents —
+   e.g. *"box 6 kitchen wine glasses note fragile, top load only"*. You can also type or
+   fix the note in the Notes box on the preview screen.
 3. Tap **Stop**.
 4. Check the label preview.
 5. Tap **Accept**. The app shows the box number the sheet assigned — write that number on the box.

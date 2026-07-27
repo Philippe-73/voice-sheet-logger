@@ -37,7 +37,9 @@
   .band .room { font-size: 26px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
   .band .box { font-size: 30px; font-weight: 800; white-space: nowrap; }
   .label textarea { color: #111; background: #fff; border: 0; margin: 0; border-radius: 0;
-                    min-height: 130px; font-size: 19px; }
+                    min-height: 130px; font-size: 19px; display: block; }
+  #notes { min-height: 62px; font-size: 16px; border-top: 1px dashed #9ca3af !important;
+           color: #374151; }
   #accept { background: #047857; font-weight: 700; font-size: 20px; padding: 20px; }
   #redo { background: #4b5563; }
   .bignum { font-size: 78px; font-weight: 800; text-align: center; padding: 26px 0 6px; }
@@ -69,6 +71,7 @@
   <div class="label">
     <div class="band" id="band"><span class="room"></span><span class="box"></span></div>
     <textarea id="content"></textarea>
+    <textarea id="notes" placeholder="Notes (optional)"></textarea>
   </div>
   <button id="accept">ACCEPT</button>
   <button id="redo">↺ Re-record</button>
@@ -214,13 +217,14 @@ function toPreview(text) {
   var p = parseEntry(text, rooms);
   if (p.room) { room = p.room; store.setItem('room', room); renderChips(); }
   if (!room) return status('Say or tap a room first');
-  entry = { box: p.box, room: room, content: p.content || text };
+  entry = { box: p.box, room: room, content: p.content || text, notes: p.notes };
 
   $('band').style.background = color(room);
   $('band').style.color = ink(color(room));
   $('band').querySelector('.room').textContent = room;
   $('band').querySelector('.box').textContent = entry.box ? 'BOX ' + entry.box : 'NEXT BOX';
   $('content').value = entry.content;
+  $('notes').value = entry.notes || '';
   show('preview');
 }
 
@@ -255,6 +259,7 @@ function accept() {
   var content = $('content').value.trim();
   if (!content) return;
   entry.content = content;
+  entry.notes = $('notes').value.trim();
   queue.push(entry); persist();
   $('accept').disabled = true;
   $('accept').textContent = 'Saving…';

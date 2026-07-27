@@ -41,6 +41,16 @@
       text = (text.slice(0, m.index) + ' ' + text.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim();
     }
 
+    // "note" / "notes" splits the rest into contents and the Notes column. Done before
+    // room matching so a room named inside a note ("note: goes beside the bedroom 2 wall")
+    // isn't mistaken for the box's destination. \b keeps "notebooks" out of it.
+    var notes = '';
+    var nm = text.match(/\bnotes?\b/);
+    if (nm) {
+      notes = text.slice(nm.index + nm[0].length).trim();
+      text = text.slice(0, nm.index).trim();
+    }
+
     // Earliest room mention wins — the room is normally said right after the box number.
     // Ties break toward the longer name so "Office Basement" beats bare "Basement".
     var best = null;
@@ -59,7 +69,9 @@
 
     var content = text;
     while (FILLER.test(content)) content = content.replace(FILLER, '');
-    return { box: box, room: room, content: content.trim() };
+    // Notes are free text — no filler stripping. It would turn "for the movers" into
+    // "movers" and quietly change what you said.
+    return { box: box, room: room, content: content.trim(), notes: notes.trim() };
   }
 
   root.parseEntry = parseEntry;

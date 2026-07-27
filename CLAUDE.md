@@ -114,8 +114,13 @@ All of the above was run and passed on 2026-07-27.
 
 ## Deliberately not built
 
-Offline service worker (the retry queue covers the real failure), LLM-based transcript
-parsing (regex + the sheet's room list is enough; add only if real speech defeats it),
-a Notes-column input (`Code.gs` accepts a `notes` key already, so it's a two-line UI
-add), photos of box contents, box search/lookup (that's an unpacking problem), per-user
-accounts, and a README (this file plus `DEPLOY.md` cover it).
+Offline caching (the service worker is deliberately empty; the retry queue covers the
+real failure), LLM-based transcript parsing (regex + the sheet's room list is enough;
+add only if real speech defeats it), photos of box contents, box search/lookup (that's
+an unpacking problem), per-user accounts, and a README (this file plus `DEPLOY.md`
+cover it).
+
+Notes (column D) *is* built: saying "note" splits the rest of the utterance into the
+Notes column, and the preview has an editable Notes box. Note text is deliberately **not**
+filler-stripped the way contents is — trimming leading words turned "for the movers" into
+"movers", which silently changes what was said.
