@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f2937">
+<title>Box Logger</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: #111827; color: #f9fafb; font: 17px/1.4 system-ui, sans-serif;
+         min-height: 100vh; padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom); }
+  .screen { display: none; padding: 16px 0 24px; }
+  .screen.on { display: block; }
+  h1 { font-size: 18px; margin: 8px 0 16px; color: #9ca3af; font-weight: 600; }
+  button { font: inherit; border: 0; border-radius: 12px; padding: 16px; width: 100%;
+           background: #374151; color: #f9fafb; margin-top: 10px; }
+  button:active { filter: brightness(1.25); }
+  input, textarea { font: inherit; width: 100%; padding: 14px; border-radius: 12px; border: 1px solid #4b5563;
+                    background: #1f2937; color: #f9fafb; margin-bottom: 12px; }
+  #chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  #chips button { width: auto; flex: 1 1 45%; margin: 0; padding: 14px 10px; font-weight: 700;
+                  font-size: 15px; opacity: .45; border: 3px solid transparent; }
+  #chips button.sel { opacity: 1; border-color: #f9fafb; }
+  #mic { height: 190px; margin-top: 20px; font-size: 26px; font-weight: 700; background: #065f46; }
+  #mic.rec { background: #b91c1c; animation: pulse 1.1s infinite; }
+  @keyframes pulse { 50% { filter: brightness(1.45); } }
+  #live { min-height: 3em; margin-top: 14px; color: #9ca3af; font-size: 16px; }
+  #status { margin-top: 14px; color: #fbbf24; min-height: 1.4em; font-size: 15px; }
+  #pending { display: none; margin-top: 16px; padding: 12px; border-radius: 12px;
+             background: #78350f; color: #fef3c7; font-size: 15px; }
+  #pending.on { display: block; }
+  /* the label preview — reads like the sticker about to go on the box */
+  .label { border-radius: 14px; overflow: hidden; background: #fff; color: #111; }
+  .band { padding: 18px 16px; display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+  .band .room { font-size: 26px; font-weight: 800; text-transform: uppercase; letter-spacing: .5px; }
+  .band .box { font-size: 30px; font-weight: 800; white-space: nowrap; }
+  .label textarea { color: #111; background: #fff; border: 0; margin: 0; border-radius: 0;
+                    min-height: 130px; font-size: 19px; }
+  #accept { background: #047857; font-weight: 700; font-size: 20px; padding: 20px; }
+  #redo { background: #4b5563; }
+  .bignum { font-size: 78px; font-weight: 800; text-align: center; padding: 26px 0 6px; }
+  .hint { text-align: center; color: #9ca3af; font-size: 15px; }
+  .fail { background: #7f1d1d; color: #fee2e2; padding: 14px; border-radius: 12px; }
+</style>
+</head>
+<body>
+
+<div id="setup" class="screen">
+  <h1>One-time setup</h1>
+  <input id="exec" type="url" placeholder="Apps Script /exec URL" autocomplete="off">
+  <input id="secret" type="password" placeholder="Password (SECRET script property)" autocomplete="off">
+  <button id="saveCfg">Save</button>
+  <p class="hint">Stored on this phone only.</p>
+</div>
+
+<div id="main" class="screen">
+  <h1>Room</h1>
+  <div id="chips"></div>
+  <button id="mic">● Record</button>
+  <div id="live"></div>
+  <div id="status"></div>
+  <div id="pending"></div>
+</div>
+
+<div id="preview" class="screen">
+  <h1>Check the label</h1>
+  <div class="label">
+    <div class="band" id="band"><span class="room"></span><span class="box"></span></div>
+    <textarea id="content"></textarea>
+  </div>
+  <button id="accept">ACCEPT</button>
+  <button id="redo">↺ Re-record</button>
+</div>
+
+<div id="done" class="screen">
+  <div id="result"></div>
+  <button id="again">Next box</button>
+</div>
+
+<script src="parse.js"></script>
+<script>
+// Placeholder label colours — swap these hexes for the real label sheets once ordered.
+// Keys must match the sheet's Room dropdown text exactly; anything else falls back to grey.
+var ROOM_COLORS = {
+  'storage':           '#9ec5e8',
+  'Dining Room':       '#f3d08a',
+  'Office Basement':   '#bfe0b0',
+  'Office 2nd Floor':  '#e6e6e6',
+  'Kitchen':           '#f7dd8f',
+  'Bedroom 1':         '#dcc0e8',
+  'Bedroom 2':         '#5b2d82',
+  'Basement':          '#1a4fa0'
+};
+var LANG = 'en-US';   // ponytail: one const — change to 'fr-CA' to dictate in French
+
+var $ = function (id) { return document.getElementById(id); };
+var store = localStorage;
+var cfg = { exec: store.getItem('exec') || '', secret: store.getItem('secret') || '' };
+var rooms = JSON.parse(store.getItem('rooms') || '[]');
+var room = store.getItem('room') || '';
+var queue = JSON.parse(store.getItem('queue') || '[]');
+var entry = null;
+
+function show(id) {
+  ['setup', 'main', 'preview', 'done'].forEach(function (s) { $(s).classList.toggle('on', s === id); });
+}
+function status(msg) { $('status').textContent = msg || ''; }
+function color(r) { return ROOM_COLORS[r] || '#9ca3af'; }
+function ink(hex) {
+  var c = [1, 3, 5].map(function (i) { return parseInt(hex.substr(i, 2), 16); });
+  return (c[0] * 299 + c[1] * 587 + c[2] * 114) / 1000 > 140 ? '#111' : '#fff';
+}
+
+// text/plain keeps this a "simple" request — no CORS preflight, which Apps Script won't answer.
+function api(payload) {
+  payload.secret = cfg.secret;
+  return fetch(cfg.exec, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(payload)
+  }).then(function (r) { return r.json(); }).then(function (j) {
+    if (!j.ok) throw new Error(j.error || 'rejected');
+    return j;
+  });
+}
+
+function renderChips() {
+  $('chips').innerHTML = '';
+  rooms.forEach(function (r) {
+    var b = document.createElement('button');
+    b.textContent = r;
+    b.style.background = color(r);
+    b.style.color = ink(color(r));
+    b.className = (r === room ? 'sel' : '');
+    b.onclick = function () { room = r; store.setItem('room', r); renderChips(); status(''); };
+    $('chips').appendChild(b);
+  });
+}
+
+function loadRooms() {
+  api({ action: 'rooms' }).then(function (j) {
+    rooms = j.rooms || [];
+    store.setItem('rooms', JSON.stringify(rooms));
+    if (rooms.indexOf(room) === -1) room = '';
+    renderChips();
+  }).catch(function (e) {
+    status(rooms.length ? 'Offline — using saved room list' : 'Cannot reach the sheet: ' + e.message);
+  });
+}
+
+/* ---- speech: tap on, tap off ---- */
+var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+var rec = null, recording = false, finalText = '', interim = '';
+
+function spawn() {
+  rec = new SR();
+  rec.lang = LANG;
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onresult = function (e) {
+    interim = '';
+    for (var i = e.resultIndex; i < e.results.length; i++) {
+      var t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) finalText += t + ' '; else interim += t;
+    }
+    $('live').textContent = (finalText + interim).trim();
+  };
+  rec.onerror = function (e) {
+    if (e.error === 'not-allowed') { recording = false; armMic(false); status('Microphone permission denied'); }
+    else if (e.error === 'network') status('Speech needs a connection');
+  };
+  // ponytail: Android Chrome ends recognition at every pause even with continuous=true,
+  // so respawn while the button is still armed or tap-to-stop truncates mid-sentence.
+  rec.onend = function () { if (recording) spawn(); };
+  rec.start();
+}
+
+function armMic(on) {
+  $('mic').classList.toggle('rec', on);
+  $('mic').textContent = on ? '■ Stop' : '● Record';
+}
+
+function startRec() {
+  if (!SR) return status('No speech support here — open in Chrome');
+  if (!rooms.length) return status('No room list yet — check the connection');
+  finalText = ''; interim = ''; $('live').textContent = '';
+  status('');
+  recording = true; armMic(true);
+  spawn();
+}
+
+function stopRec() {
+  recording = false; armMic(false);
+  try { rec.stop(); } catch (e) {}
+  toPreview((finalText + ' ' + interim).trim());
+}
+
+function toPreview(text) {
+  if (!text) return status('Heard nothing — try again');
+  var p = parseEntry(text, rooms);
+  if (p.room) { room = p.room; store.setItem('room', room); renderChips(); }
+  if (!room) return status('Say or tap a room first');
+  entry = { box: p.box, room: room, content: p.content || text };
+
+  $('band').style.background = color(room);
+  $('band').style.color = ink(color(room));
+  $('band').querySelector('.room').textContent = room;
+  $('band').querySelector('.box').textContent = entry.box ? 'BOX ' + entry.box : 'NEXT BOX';
+  $('content').value = entry.content;
+  show('preview');
+}
+
+/* ---- saving: queue first so nothing is lost, then drain ---- */
+function persist() { store.setItem('queue', JSON.stringify(queue)); }
+
+function flush() {
+  var assigned = [];
+  function step() {
+    if (!queue.length) { persist(); return { assigned: assigned }; }
+    return api(Object.assign({ action: 'save' }, queue[0])).then(function (j) {
+      assigned.push({ box: j.box, room: queue[0].room });
+      queue.shift(); persist();
+      return step();
+    }).catch(function (e) {
+      persist();
+      return { assigned: assigned, error: e.message };
+    });
+  }
+  return Promise.resolve().then(step);
+}
+
+function showPending() {
+  $('pending').classList.toggle('on', queue.length > 0);
+  if (queue.length) {
+    $('pending').innerHTML = queue.length + ' box(es) held on this phone, not in the sheet yet.' +
+      '<button onclick="retry()">Retry now</button>';
+  }
+}
+
+function accept() {
+  var content = $('content').value.trim();
+  if (!content) return;
+  entry.content = content;
+  queue.push(entry); persist();
+  $('accept').disabled = true;
+  $('accept').textContent = 'Saving…';
+  flush().then(function (r) {
+    $('accept').disabled = false;
+    $('accept').textContent = 'ACCEPT';
+    result(r);
+  });
+}
+
+function result(r) {
+  var h = '';
+  if (r.assigned.length === 1) {
+    var a = r.assigned[0];
+    h += '<div class="label"><div class="band" style="background:' + color(a.room) + ';color:' + ink(color(a.room)) +
+         '"><span class="room">' + a.room + '</span></div><div class="bignum">' + a.box +
+         '</div><p class="hint" style="padding-bottom:16px">Write this number on the box</p></div>';
+  } else if (r.assigned.length > 1) {
+    h += '<div class="label"><div class="bignum" style="font-size:30px">' +
+         r.assigned.map(function (a) { return 'Box ' + a.box + ' · ' + a.room; }).join('<br>') +
+         '</div><p class="hint" style="padding-bottom:16px">Numbers assigned — label those boxes</p></div>';
+  }
+  if (r.error) {
+    h += '<div class="fail"><b>Not saved</b> — ' + r.error +
+         '<br>' + queue.length + ' held on this phone. Tap Retry when you have a connection.</div>' +
+         '<button onclick="retry()">Retry</button>';
+  }
+  $('result').innerHTML = h;
+  $('again').style.display = r.error ? 'none' : '';
+  show('done');
+}
+
+function retry() { flush().then(result); }
+
+/* ---- wiring ---- */
+$('saveCfg').onclick = function () {
+  var u = $('exec').value.trim(), s = $('secret').value;
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(u)) return alert('That should end in /exec');
+  if (!s) return alert('Password required');
+  cfg = { exec: u, secret: s };
+  store.setItem('exec', u); store.setItem('secret', s);
+  show('main'); loadRooms();
+};
+$('mic').onclick = function () { recording ? stopRec() : startRec(); };
+$('redo').onclick = function () { show('main'); startRec(); };
+$('accept').onclick = accept;
+$('again').onclick = function () { show('main'); showPending(); status(''); $('live').textContent = ''; };
+window.addEventListener('online', function () { if (queue.length) retry(); });
+
+if (!cfg.exec || !cfg.secret) { show('setup'); }
+else {
+  show('main'); renderChips(); loadRooms(); showPending();
+  if (queue.length) flush().then(function (r) { if (r.assigned.length || r.error) result(r); });
+}
+</script>
+</body>
+</html>
